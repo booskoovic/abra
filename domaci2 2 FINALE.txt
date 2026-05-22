@@ -1,0 +1,203 @@
+DOMACI 2 - KOMPLETNO UPUTSTVO (verzija 3 - FINALNO)
+=====================================================
+
+Repo: https://github.com/elab-development/domaci2
+Prefiks u primeru: fb2024138 (zameni svojim!)
+
+
+CISCENJE OD STARIH POKUSAJA (ako ima):
+=======================================
+
+sudo docker stop $(docker ps -q) 2>/dev/null
+sudo docker rm $(docker ps -aq) 2>/dev/null
+sudo docker volume rm fb20240138-vol 2>/dev/null
+sudo docker network rm fb20240138-network 2>/dev/null
+sudo docker rmi fb20240138-img fb20240138-img:v2 2>/dev/null
+
+
+SETUP PROJEKTA:
+================
+
+cd Documents
+mkdir fb20240138-folder
+cd fb20240138-folder
+git init
+git clone https://github.com/elab-development/domaci2.git
+cd domaci2
+code .
+
+
+===============================================
+ZAHTEV 1 - Dockerfile + image fb20240138-img
+===============================================
+
+U root-u projekta kreiraj fajl Dockerfile sa sadrzajem:
+
+touch Dockerfile
+
+FROM node
+WORKDIR /app
+COPY package.json /app
+RUN npm install
+COPY . .
+EXPOSE 3001
+CMD ["node", "server.js"]
+
+Build image:
+sudo docker build -t fb20240138-img .
+
+===============================================
+ZAHTEV 2 - cont1 na portu 3001
+===============================================
+
+sudo docker run -d -p 3001:3001 --name fb20240138-cont1 fb20240138-img
+
+Test: otvori http://localhost:3001 - treba da vidis formu.
+
+===============================================
+ZAHTEV 3 - cont2 na portu 4000 sa volume-om
+===============================================
+
+sudo docker volume create fb20240138-vol
+
+sudo docker run -d -p 4000:3001 --name fb20240138-cont2 -v fb20240138-vol:/app/feedback fb20240138-img
+
+Test: otvori http://localhost:4000
+
+Popuni formu:
+  Naslov: fb20240138-fajl
+  Tekst: Ovo je drugi domaci
+  Klik "Posalji"
+
+===============================================
+ZAHTEV 4 - cont3 na portu 4001 sa istim volume-om
+===============================================
+
+sudo docker run -d -p 4001:3001 --name fb20240138-cont3 -v fb20240138-vol:/app/feedback fb20240138-img
+
+Test: otvori http://localhost:4001 - vidis isti folder fajlova
+kao na 4000 (jer dele volume).
+
+===============================================
+ZAHTEV 5 - MySQL kontejner sa bazom feedback_db
+===============================================
+sudo docker pull mysql:latest
+
+sudo docker run -d --name fb20240138-server -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_DATABASE=feedback_db mysql:latest
+
+NAPOMENA: Ne stavljamo MYSQL_USER i MYSQL_PASSWORD env varijable.
+Korisnika cemo dodati rucno u Zahtevu 5.5 (cistije rešenje).
+
+Sacekaj 25-30 sekundi pre sledeceg koraka.
+
+Provera da je spreman:
+docker logs fb20240138-server 2>&1 | tail -3
+
+Treba da vidis "ready for connections".
+
+===============================================
+ZAHTEV 5.5 - Rucno dodavanje korisnika fuser
+===============================================
+
+Udji u MySQL kao root:
+sudo docker exec -it fb20240138-server mysql -uroot -ppass
+
+Unutar MySQL-a kucaj:
+
+CREATE USER 'fuser'@'%' IDENTIFIED BY 'fpass';
+ALTER USER 'fuser'@'%' IDENTIFIED WITH mysql_native_password BY 'fpass';
+GRANT ALL PRIVILEGES ON feedback_db.* TO 'fuser'@'%';
+FLUSH PRIVILEGES;
+EXIT;
+
+Provera da je korisnik dodat:
+sudo docker exec fb20240138-server mysql -uroot -ppass -e "SELECT user, host FROM mysql.user WHERE user='fuser';"
+
+Treba da vidis red sa 'fuser' i '%'.
+
+===============================================
+ZAHTEV 6 - Log fajl unutar MySQL kontejnera
+===============================================
+
+Udji u MySQL kontejner:
+sudo docker exec -it fb20240138-server bash
+
+Unutar kontejnera kucaj:
+mysql -uroot -ppass -e "SHOW DATABASES; SELECT user, host FROM mysql.user;" > /tmp/provera_baze.log 2>&1
+cat /tmp/provera_baze.log
+exit
+
+U log-u treba da vidis i "feedback_db" i "fuser".
+
+===============================================
+ZAHTEV 7 - Mreza + MySQL na mrezi
+===============================================
+
+sudo docker network create fb20240138-network
+sudo docker network connect fb20240138-network fb20240138-server
+
+===============================================
+ZAHTEV 8 - Image fb20240138-img:v2
+===============================================
+
+sudo docker tag fb20240138-img fb20240138-img:v2
+
+Provera:
+sudo docker images
+
+Treba da vidis i fb20240138-img i fb20240138-img:v2
+
+===============================================
+ZAHTEV 9 - baza1 kontejner na portu 5000
+===============================================
+
+(Ovo je glavni app kontejner sa volume-om i na mrezi)
+
+Pokreni:
+sudo docker run -d -p 5000:3001 --name fb20240138-baza1 --network fb20240138-network -v fb20240138-vol:/app/feedback -e DB_HOST=fb20240138-server -e DB_USER=fuser -e DB_PASSWORD=fpass -e DB_NAME=feedback_db fb20240138-img:v2
+
+Test: http://localhost:5000/db-status
+Treba da vrati: {"available":true}
+
+===============================================
+ZAHTEV 10 - /api/feedback ruta sa count > 0
+===============================================
+
+Otvori http://localhost:5000
+
+Popuni formu:
+  Naslov: fb20240138-fajlbaza
+  Tekst: Ovo je drugi domaci sa bazom
+  Klik "Posalji"
+
+Ovo radi 3 stvari odjednom:
+1. Pravi DRUGI fajl u volume-u: fb20240138-fajlbaza-<timestamp>.txt
+2. Cuva meta podatke u feedback_db tabelu
+3. /api/feedback rute pocinje da vraca count >= 1
+
+Provera:
+curl http://localhost:5000/api/feedback
+
+Treba JSON sa "success":true, "count":1+ i niz podataka.
+
+===============================================
+ZAVRSNA PROVERA - sve mora postojati i raditi
+===============================================
+
+docker images | grep fb20240138
+docker ps
+docker volume ls
+docker network ls | grep fb20240138
+
+Trebas imati:
+- 2 image-a: fb20240138-img i fb20240138-img:v2
+- 5 pokrenutih kontejnera: cont1, cont2, cont3, server, baza1
+- 1 volume: fb20240138-vol
+- 1 mreza: fb20240138-network
+
+NUKLEARKA: sudo docker system prune -a --volumes za vulome
+sudo lsof -i :5000
+sudo kill -9 pid broj za port
+sudo docker rm -f fb20240138-cont1 za kontejner
+
+sudo ./checkdom2.sh fb20240138
