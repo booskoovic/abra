@@ -1,0 +1,35 @@
+ZAHTEV 1 
+    FROM python:3.11-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY app.py db.py ./
+    CMD ["python", "app.py"]
+
+    sudo docker build -t fb20240138-img .
+
+ZAHTEV 2
+    sudo docker run -d --name fb20240138-cont1 -p 5001:5000 fb20240138-img
+ZAHTEV 3
+    sudo docker volume create fb20240138-vol
+Pokreni kontejner:
+    sudo docker run -d --name fb20240138-cont2 -p 7000:5000 -v fb20240138-vol:/app/notes fb20240138-img
+ZAHTEV 4
+kreiraj belesku na 7001
+    sudo docker run -d --name fb20240138-cont3 -p 7001:5000 -v fb20240138-vol:/app/notes fb20240138-img
+ZAHTEV 5
+    sudo docker pull mysql:latest
+    sudo docker run -d --name fb20240138-baza -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_DATABASE=notes_db -e MYSQL_USER=nuser -e MYSQL_PASSWORD=npass mysql:latest
+ZAHTEV 6
+    sudo docker exec fb20240138-baza sh -c "echo 'Inicijalizacija: notes_db, nuser' > /tmp/setup.log"
+ZAHTEV 7
+    sudo docker network create fb20240138-network
+    sudo docker network connect fb20240138-network fb20240138-baza
+ZAHTEV 8
+    sudo docker build -t fb20240138-img:v2 .
+ZAHTEV 9
+    sudo docker run -d --name fb20240138-server -p 8000:5000 -v fb20240138-vol:/app/notes --network fb20240138-network -e DB_HOST=fb20240138-baza -e DB_USER=nuser -e DB_PASSWORD=npass -e DB_NAME=notes_db fb20240138-img:v2
+ZAHTEV 10
+kreiraj belesku na 8000
+
+    sudo ./checkdom2.sh fb20240138
