@@ -56,10 +56,7 @@ sudo docker network connect fb20240138-network fb20240138-server
 sudo docker tag fb20240138-img fb20240138-img:v2
 
 9.ZAHTEV
-
 sudo docker run -d -p 5000:3001 --name fb20240138-baza1 --network fb20240138-network -v fb20240138-vol:/app/feedback -e DB_HOST=fb20240138-server -e DB_USER=fuser -e DB_PASSWORD=fpass -e DB_NAME=feedback_db fb20240138-img:v2
-
-
 
 10.ZAHTEV
 otvori 5000 db status pa popuni formu
