@@ -6,10 +6,9 @@ ZAHTEV 2
     sudo docker run -d --name fb20240138-cont1 -p 5001:5000 fb20240138-img
 ZAHTEV 3
     sudo docker volume create fb20240138-vol
-Pokreni kontejner:
     sudo docker run -d --name fb20240138-cont2 -p 7000:5000 -v fb20240138-vol:/app/notes fb20240138-img
 ZAHTEV 4
-kreiraj belesku na 7001
+kreiraj belesku na 7000
     sudo docker run -d --name fb20240138-cont3 -p 7001:5000 -v fb20240138-vol:/app/notes fb20240138-img
 ZAHTEV 5
     sudo docker pull mysql:latest
